@@ -27,6 +27,10 @@ var clients = make(map[string][]*websocket.Conn)
 var clientLock = sync.RWMutex{}
 
 func WsHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "http://localhost:5173")
+	w.Header().Set("Access-Control-Allow-Credentials", "true")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		fmt.Println("Error upgrading:", err)
@@ -54,6 +58,36 @@ func WsHandler(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		go handleMessages(conn, incoming)
+	}
+}
+func handleMessages(conn *websocket.Conn, incoming IncomingMessage) {
+	switch incoming.Type {
+	case "fetch":
+		err := fetchMessages(incoming.Room, conn)
+		if err != nil {
+			fmt.Println("Error sending Messages:", err)
+		}
+	case "send":
+		err := sendMessage(incoming)
+		if err != nil {
+			fmt.Println("Error Sending Message: " + err.Error())
+		}
+	case "getRooms":
+		err := getRooms(conn)
+		if err != nil {
+			fmt.Println("Error getting Rooms:", err)
+		}
+
+	case "create":
+		CreateChatRoom(incoming.Room)
+		fmt.Println("Chat room created: ", incoming.Room)
+	case "joinChat":
+		err := joinRoom(incoming, conn)
+		if err != nil {
+			fmt.Println("Error Joining Chat:", err)
+		}
+	case "leaveChat":
+		removeClientFromRoom(incoming.Room, conn)
 	}
 }
 func sendMessage(incoming IncomingMessage) error {
@@ -96,36 +130,6 @@ func getRooms(conn *websocket.Conn) error {
 		return err
 	}
 	return conn.WriteMessage(websocket.TextMessage, jsonData)
-}
-func handleMessages(conn *websocket.Conn, incoming IncomingMessage) {
-	switch incoming.Type {
-	case "fetch":
-		err := fetchMessages(incoming.Room, conn)
-		if err != nil {
-			fmt.Println("Error sending Messages:", err)
-		}
-	case "send":
-		err := sendMessage(incoming)
-		if err != nil {
-			fmt.Println("Error Sending Message: " + err.Error())
-		}
-	case "getRooms":
-		err := getRooms(conn)
-		if err != nil {
-			fmt.Println("Error getting Rooms:", err)
-		}
-
-	case "create":
-		CreateChatRoom(incoming.Room)
-		fmt.Println("Chat room created: ", incoming.Room)
-	case "joinChat":
-		err := joinRoom(incoming, conn)
-		if err != nil {
-			fmt.Println("Error Joining Chat:", err)
-		}
-	case "leaveChat":
-		removeClientFromRoom(incoming.Room, conn)
-	}
 }
 func containsConn(connections []*websocket.Conn, target *websocket.Conn) bool {
 	for _, conn := range connections {

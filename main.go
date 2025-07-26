@@ -19,7 +19,7 @@ func main() {
 	}
 }
 func backup(sleepMinutes int) {
-	var fails int = 0
+	var fails = 0
 	for {
 		fmt.Println("Backing up...")
 		err := gopackages.SaveChats()
