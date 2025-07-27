@@ -181,7 +181,12 @@ func fetchMessages(room string, conn *websocket.Conn) error {
 	if err != nil {
 		return err
 	}
-	err = conn.WriteMessage(websocket.TextMessage, jsonData)
+	msg := OutgoingMessage{Type: "info", Message: string(jsonData)}
+	msgJson, err := json.Marshal(msg)
+	if err != nil {
+		return err
+	}
+	err = conn.WriteMessage(websocket.TextMessage, msgJson)
 	if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
 		removeClientFromRoom(room, conn)
 		return nil
@@ -194,7 +199,12 @@ func getRooms(conn *websocket.Conn) error {
 	if err != nil {
 		return err
 	}
-	return conn.WriteMessage(websocket.TextMessage, jsonData)
+	msg := OutgoingMessage{Type: "info", Message: string(jsonData)}
+	msgJson, err := json.Marshal(msg)
+	if err != nil {
+		return err
+	}
+	return conn.WriteMessage(websocket.TextMessage, msgJson)
 }
 func containsConn(connections []*websocket.Conn, target *websocket.Conn) bool {
 	for _, conn := range connections {
