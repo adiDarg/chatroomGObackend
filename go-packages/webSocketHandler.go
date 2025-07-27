@@ -17,6 +17,10 @@ type IncomingMessage struct {
 	Value     string `json:"Value,omitempty"`
 	Timestamp string `json:"TimeStamp,omitempty"`
 }
+type OutgoingMessage struct {
+	Type    string `json:"type"`
+	Message string `json:"Message"`
+}
 
 var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
@@ -61,10 +65,12 @@ func WsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 func handleMessages(conn *websocket.Conn, incoming IncomingMessage) {
+	success := true
 	switch incoming.Type {
 	case "fetch":
 		err := fetchMessages(incoming.Room, conn)
 		if err != nil {
+			success = false
 			fmt.Println("Error sending Messages:", err)
 			go func() {
 				err := sendErrorToUser(conn, err.Error())
@@ -76,6 +82,7 @@ func handleMessages(conn *websocket.Conn, incoming IncomingMessage) {
 	case "send":
 		err := sendMessage(incoming)
 		if err != nil {
+			success = false
 			fmt.Println("Error Sending Message: " + err.Error())
 			go func() {
 				err := sendErrorToUser(conn, err.Error())
@@ -88,6 +95,7 @@ func handleMessages(conn *websocket.Conn, incoming IncomingMessage) {
 	case "getRooms":
 		err := getRooms(conn)
 		if err != nil {
+			success = false
 			fmt.Println("Error getting Rooms:", err)
 			go func() {
 				err := sendErrorToUser(conn, err.Error())
@@ -103,6 +111,7 @@ func handleMessages(conn *websocket.Conn, incoming IncomingMessage) {
 	case "joinChat":
 		err := joinRoom(incoming, conn)
 		if err != nil {
+			success = false
 			fmt.Println("Error Joining Chat:", err)
 			go func() {
 				err := sendErrorToUser(conn, err.Error())
@@ -113,6 +122,20 @@ func handleMessages(conn *websocket.Conn, incoming IncomingMessage) {
 		}
 	case "leaveChat":
 		removeClientFromRoom(incoming.Room, conn)
+	}
+	if success {
+		msg := OutgoingMessage{
+			Type:    "success",
+			Message: "",
+		}
+		jsonMSG, err := json.Marshal(msg)
+		if err != nil {
+			fmt.Println("Error sending success message: ", err)
+		}
+		err = conn.WriteMessage(websocket.TextMessage, jsonMSG)
+		if err != nil {
+			fmt.Println("Error sending success message: ", err)
+		}
 	}
 }
 func sendMessage(incoming IncomingMessage) error {
@@ -219,9 +242,9 @@ func removeClientFromRoom(room string, conn *websocket.Conn) {
 	}
 }
 func sendErrorToUser(conn *websocket.Conn, message string) error {
-	errorMsg := map[string]string{
-		"type":    "error",
-		"message": message,
+	errorMsg := OutgoingMessage{
+		Type:    "error",
+		Message: message,
 	}
 	msgBytes, _ := json.Marshal(errorMsg)
 	return conn.WriteMessage(websocket.TextMessage, msgBytes)
