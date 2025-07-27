@@ -66,16 +66,35 @@ func handleMessages(conn *websocket.Conn, incoming IncomingMessage) {
 		err := fetchMessages(incoming.Room, conn)
 		if err != nil {
 			fmt.Println("Error sending Messages:", err)
+			go func() {
+				err := sendErrorToUser(conn, err.Error())
+				if err != nil {
+					fmt.Println("Error sending error message:", err)
+				}
+			}()
 		}
 	case "send":
 		err := sendMessage(incoming)
 		if err != nil {
 			fmt.Println("Error Sending Message: " + err.Error())
+			go func() {
+				err := sendErrorToUser(conn, err.Error())
+				if err != nil {
+					fmt.Println("Error sending error message:", err)
+				}
+			}()
 		}
+
 	case "getRooms":
 		err := getRooms(conn)
 		if err != nil {
 			fmt.Println("Error getting Rooms:", err)
+			go func() {
+				err := sendErrorToUser(conn, err.Error())
+				if err != nil {
+					fmt.Println("Error sending error message:", err)
+				}
+			}()
 		}
 
 	case "create":
@@ -85,12 +104,35 @@ func handleMessages(conn *websocket.Conn, incoming IncomingMessage) {
 		err := joinRoom(incoming, conn)
 		if err != nil {
 			fmt.Println("Error Joining Chat:", err)
+			go func() {
+				err := sendErrorToUser(conn, err.Error())
+				if err != nil {
+					fmt.Println("Error sending error message:", err)
+				}
+			}()
 		}
 	case "leaveChat":
 		removeClientFromRoom(incoming.Room, conn)
 	}
 }
 func sendMessage(incoming IncomingMessage) error {
+	err := WriteMessage(Message{incoming.Username, incoming.Room, incoming.Value, incoming.Timestamp})
+	if err != nil {
+		return err
+	}
+	clientLock.RLock()
+	for _, client := range clients[incoming.Room] {
+		go func(c *websocket.Conn) {
+			err := fetchMessages(incoming.Room, c)
+			if err != nil {
+				fmt.Println("Error sending Messages:", err)
+			}
+		}(client)
+	}
+	clientLock.RUnlock()
+	return nil
+}
+func sendSystemMessage(incoming IncomingMessage) error {
 	err := WriteMessage(Message{incoming.Username, incoming.Room, incoming.Value, incoming.Timestamp})
 	if err != nil {
 		return err
@@ -154,7 +196,7 @@ func joinRoom(incoming IncomingMessage, conn *websocket.Conn) error {
 		Timestamp: time.Now().Format(time.RFC3339),
 	}
 	go func() {
-		err := sendMessage(newMSG)
+		err := sendSystemMessage(newMSG)
 		if err != nil {
 			fmt.Println("Error sending X joined chat message: ", err)
 		}
@@ -175,4 +217,12 @@ func removeClientFromRoom(room string, conn *websocket.Conn) {
 	if len(clients[room]) == 0 {
 		delete(clients, room)
 	}
+}
+func sendErrorToUser(conn *websocket.Conn, message string) error {
+	errorMsg := map[string]string{
+		"type":    "error",
+		"message": message,
+	}
+	msgBytes, _ := json.Marshal(errorMsg)
+	return conn.WriteMessage(websocket.TextMessage, msgBytes)
 }
