@@ -27,7 +27,7 @@ type chatManager struct {
 var (
 	instance   *chatManager
 	once       sync.Once
-	storageDir = "chat-storage/"
+	storageDir = "chat-storage"
 )
 
 func init() {
@@ -47,7 +47,7 @@ func loadChats() (map[string]*chatRoom, error) {
 		instance = &chatManager{chatRooms: chatRooms}
 	}
 	for _, file := range files {
-		openFile, err := os.Open(file.Name())
+		openFile, err := os.Open(storageDir + "/" + file.Name())
 		if err != nil {
 			fmt.Println(err)
 			continue

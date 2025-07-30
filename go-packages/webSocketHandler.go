@@ -11,15 +11,15 @@ import (
 )
 
 type IncomingMessage struct {
-	Type      string `json:"type"` // "fetch" or "send"
+	Type      string `json:"Type"` // "fetch" or "send"
 	Username  string `json:"Username,omitempty"`
-	Room      string `json:"room,omitempty"`
+	Room      string `json:"Room,omitempty"`
 	Value     string `json:"Value,omitempty"`
-	Timestamp string `json:"TimeStamp,omitempty"`
+	Timestamp string `json:"Timestamp,omitempty"`
 }
 type OutgoingMessage struct {
 	Type    string `json:"type"`
-	Message string `json:"Message"`
+	Message string `json:"message"`
 }
 
 var upgrader = websocket.Upgrader{
@@ -108,7 +108,7 @@ func handleMessages(conn *websocket.Conn, incoming IncomingMessage) {
 	case "create":
 		CreateChatRoom(incoming.Room)
 		fmt.Println("Chat room created: ", incoming.Room)
-	case "joinChat":
+	case "join":
 		err := joinRoom(incoming, conn)
 		if err != nil {
 			success = false
@@ -120,13 +120,13 @@ func handleMessages(conn *websocket.Conn, incoming IncomingMessage) {
 				}
 			}()
 		}
-	case "leaveChat":
+	case "leave":
 		removeClientFromRoom(incoming.Room, conn)
 	}
 	if success {
 		msg := OutgoingMessage{
 			Type:    "success",
-			Message: "",
+			Message: incoming.Type,
 		}
 		jsonMSG, err := json.Marshal(msg)
 		if err != nil {
