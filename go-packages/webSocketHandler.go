@@ -19,7 +19,7 @@ type IncomingMessage struct {
 }
 type OutgoingMessage struct {
 	Type    string `json:"type"`
-	Message string `json:"message"`
+	Message any    `json:"message"`
 }
 
 var upgrader = websocket.Upgrader{
@@ -29,6 +29,7 @@ var upgrader = websocket.Upgrader{
 }
 var clients = make(map[string][]*websocket.Conn)
 var clientLock = sync.RWMutex{}
+var sendMessageLock = sync.RWMutex{}
 
 func WsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "http://localhost:5173")
@@ -73,7 +74,7 @@ func handleMessages(conn *websocket.Conn, incoming IncomingMessage) {
 			success = false
 			fmt.Println("Error sending Messages:", err)
 			go func() {
-				err := sendErrorToUser(conn, err.Error())
+				err := syncWriteToConn(conn, "error", err.Error())
 				if err != nil {
 					fmt.Println("Error sending error message:", err)
 				}
@@ -85,7 +86,7 @@ func handleMessages(conn *websocket.Conn, incoming IncomingMessage) {
 			success = false
 			fmt.Println("Error Sending Message: " + err.Error())
 			go func() {
-				err := sendErrorToUser(conn, err.Error())
+				err := syncWriteToConn(conn, "error", err.Error())
 				if err != nil {
 					fmt.Println("Error sending error message:", err)
 				}
@@ -98,7 +99,7 @@ func handleMessages(conn *websocket.Conn, incoming IncomingMessage) {
 			success = false
 			fmt.Println("Error getting Rooms:", err)
 			go func() {
-				err := sendErrorToUser(conn, err.Error())
+				err := syncWriteToConn(conn, "error", err.Error())
 				if err != nil {
 					fmt.Println("Error sending error message:", err)
 				}
@@ -114,7 +115,7 @@ func handleMessages(conn *websocket.Conn, incoming IncomingMessage) {
 			success = false
 			fmt.Println("Error Joining Chat:", err)
 			go func() {
-				err := sendErrorToUser(conn, err.Error())
+				err := syncWriteToConn(conn, "error", err.Error())
 				if err != nil {
 					fmt.Println("Error sending error message:", err)
 				}
@@ -124,17 +125,9 @@ func handleMessages(conn *websocket.Conn, incoming IncomingMessage) {
 		removeClientFromRoom(incoming.Room, conn)
 	}
 	if success {
-		msg := OutgoingMessage{
-			Type:    "success",
-			Message: incoming.Type,
-		}
-		jsonMSG, err := json.Marshal(msg)
+		err := syncWriteToConn(conn, "success", incoming.Type)
 		if err != nil {
-			fmt.Println("Error sending success message: ", err)
-		}
-		err = conn.WriteMessage(websocket.TextMessage, jsonMSG)
-		if err != nil {
-			fmt.Println("Error sending success message: ", err)
+			fmt.Println("Error sending message:", err)
 		}
 	}
 }
@@ -177,34 +170,12 @@ func fetchMessages(room string, conn *websocket.Conn) error {
 	if err != nil {
 		return err
 	}
-	jsonData, err := json.Marshal(messages)
-	if err != nil {
-		return err
-	}
-	msg := OutgoingMessage{Type: "info", Message: string(jsonData)}
-	msgJson, err := json.Marshal(msg)
-	if err != nil {
-		return err
-	}
-	err = conn.WriteMessage(websocket.TextMessage, msgJson)
-	if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-		removeClientFromRoom(room, conn)
-		return nil
-	}
+	err = syncWriteToConn(conn, "info", messages)
 	return err
 }
 func getRooms(conn *websocket.Conn) error {
 	rooms := GetRooms()
-	jsonData, err := json.Marshal(rooms)
-	if err != nil {
-		return err
-	}
-	msg := OutgoingMessage{Type: "info", Message: string(jsonData)}
-	msgJson, err := json.Marshal(msg)
-	if err != nil {
-		return err
-	}
-	return conn.WriteMessage(websocket.TextMessage, msgJson)
+	return syncWriteToConn(conn, "info", rooms)
 }
 func containsConn(connections []*websocket.Conn, target *websocket.Conn) bool {
 	for _, conn := range connections {
@@ -251,11 +222,15 @@ func removeClientFromRoom(room string, conn *websocket.Conn) {
 		delete(clients, room)
 	}
 }
-func sendErrorToUser(conn *websocket.Conn, message string) error {
-	errorMsg := OutgoingMessage{
-		Type:    "error",
+
+func syncWriteToConn(conn *websocket.Conn, mType string, message any) error {
+	msg := OutgoingMessage{
+		Type:    mType,
 		Message: message,
 	}
-	msgBytes, _ := json.Marshal(errorMsg)
-	return conn.WriteMessage(websocket.TextMessage, msgBytes)
+	msgBytes, _ := json.Marshal(msg)
+	sendMessageLock.Lock()
+	err := conn.WriteMessage(websocket.TextMessage, msgBytes)
+	sendMessageLock.Unlock()
+	return err
 }
