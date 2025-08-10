@@ -98,7 +98,6 @@ func WriteMessage(message Message) error {
 		return errors.New("chat room " + message.ChatRoom + " does not exist")
 	}
 	chatRoom.Messages = append(chatRoom.Messages, message)
-	instance.chatRooms[message.ChatRoom].Messages = append(instance.chatRooms[message.ChatRoom].Messages, message)
 	return nil
 }
 func GetMessages(room string) ([]Message, error) {

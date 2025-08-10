@@ -11,11 +11,11 @@ import (
 )
 
 type IncomingMessage struct {
-	Type      string `json:"Type"` // "fetch" or "send"
-	Username  string `json:"Username,omitempty"`
-	Room      string `json:"Room,omitempty"`
-	Value     string `json:"Value,omitempty"`
-	Timestamp string `json:"Timestamp,omitempty"`
+	Type      string    `json:"Type"` // "fetch" or "send"
+	Username  string    `json:"Username,omitempty"`
+	Room      string    `json:"Room,omitempty"`
+	Value     string    `json:"Value,omitempty"`
+	Timestamp time.Time `json:"Timestamp,omitempty"`
 }
 type OutgoingMessage struct {
 	Type    string `json:"type"`
@@ -132,7 +132,7 @@ func handleMessages(conn *websocket.Conn, incoming IncomingMessage) {
 	}
 }
 func sendMessage(incoming IncomingMessage) error {
-	err := WriteMessage(Message{incoming.Username, incoming.Room, incoming.Value, incoming.Timestamp})
+	err := WriteMessage(Message{incoming.Username, incoming.Room, incoming.Value, incoming.Timestamp.String()})
 	if err != nil {
 		return err
 	}
@@ -149,7 +149,7 @@ func sendMessage(incoming IncomingMessage) error {
 	return nil
 }
 func sendSystemMessage(incoming IncomingMessage) error {
-	err := WriteMessage(Message{incoming.Username, incoming.Room, incoming.Value, incoming.Timestamp})
+	err := WriteMessage(Message{incoming.Username, incoming.Room, incoming.Value, incoming.Timestamp.String()})
 	if err != nil {
 		return err
 	}
@@ -197,7 +197,7 @@ func joinRoom(incoming IncomingMessage, conn *websocket.Conn) error {
 		Type:      "send",
 		Username:  "system",
 		Value:     incoming.Username + " has joined the chat",
-		Timestamp: time.Now().Format(time.RFC3339),
+		Timestamp: time.Now(),
 	}
 	go func() {
 		err := sendSystemMessage(newMSG)
